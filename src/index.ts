@@ -13,12 +13,14 @@ import { connectDB } from "./infrastructure/db";
 const app = express();
 app.use(express.json()); // For parsing JSON requests
 app.use(clerkMiddleware());
+
+const allowedOrigins = [
+  'http://localhost:5173',  // Your local development URL
+  'https://fed-frontend-sewwandi.netlify.app'  // Your production frontend URL
+];
+
 app.use(cors({
-  origin: [
-    'https://fed-frontend-sewwandi.netlify.app',
-    'http://localhost:5173',
-    'http://localhost:3000'  // in case you use this port too
-  ],
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   credentials: true
 }));
