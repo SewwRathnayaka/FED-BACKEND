@@ -13,7 +13,15 @@ import { connectDB } from "./infrastructure/db";
 const app = express();
 app.use(express.json()); // For parsing JSON requests
 app.use(clerkMiddleware());
-app.use(cors({ origin: "https://fed-frontend-sewwandi.netlify.app" }));
+app.use(cors({
+  origin: [
+    'https://fed-frontend-sewwandi.netlify.app',
+    'http://localhost:5173',
+    'http://localhost:3000'  // in case you use this port too
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  credentials: true
+}));
 
 app.use("/api/products", productRouter);
 app.use("/api/categories", categoryRouter);
