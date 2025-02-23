@@ -25,3 +25,13 @@ const ProductSchema = new mongoose.Schema({
 });
 
 export default mongoose.model("Product", ProductSchema);
+
+// Add this debug query to check your data
+const debugProducts = async (categoryId: string) => {
+  const products = await mongoose.model("Product").find({}).lean();
+  console.log('All products:', products.map(p => ({
+    id: p._id,
+    categoryId: p.categoryId,
+    name: p.name
+  })));
+};
