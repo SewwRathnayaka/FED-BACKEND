@@ -11,16 +11,23 @@ export const getProducts = async (
   next: NextFunction
 ) => {
   try {
-    const { categoryId } = req.query;
-    if (!categoryId) {
-      const data = await Product.find();
-      res.status(200).json(data);
-      return;
+    const { categoryId, sort } = req.query;
+    let query = Product.find().populate("categoryId");
+
+    // Apply category filter if provided and not "ALL"
+    if (categoryId && categoryId !== "ALL") {
+      query = query.find({ categoryId });
     }
 
-    const data = await Product.find({ categoryId });
-    res.status(200).json(data);
-    return;
+    // Apply sorting if provided
+    if (sort === 'asc') {
+      query = query.sort({ price: 1 });
+    } else if (sort === 'desc') {
+      query = query.sort({ price: -1 });
+    }
+
+    const products = await query.exec();
+    res.status(200).json(products);
   } catch (error) {
     next(error);
   }

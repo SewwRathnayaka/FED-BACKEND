@@ -15,8 +15,9 @@ app.use(express.json()); // For parsing JSON requests
 app.use(clerkMiddleware());
 
 const allowedOrigins = [
-  'http://localhost:5173',  // Your local development URL
-  'https://fed-frontend-sewwandi.netlify.app'  // Your production frontend URL
+  'http://localhost:5173',        // Local development
+  'http://localhost:3000',        // Alternative local port
+  'https://fed-frontend-sewwandi.netlify.app'  // Your production frontend
 ];
 
 app.use(cors({
