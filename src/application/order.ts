@@ -88,6 +88,7 @@ export const getUserOrders = async (
       .populate({
         path: "items.product",
         model: "Product",
+        select: "name image" // Ensure image is selected
       });
     console.log("Populated orders:", populatedOrders); // Debug populated orders
     

@@ -17,7 +17,7 @@ app.use(clerkMiddleware());
 const allowedOrigins = [
   'http://localhost:5173',        // Local development
   'http://localhost:3000',        // Alternative local port
-  'https://fed-frontend-sewwandi.netlify.app'  // Your production frontend
+  'https://fed-storefront-frontend-sewwandi-dev.netlify.app'  // Updated production frontend
 ];
 
 app.use(cors({
@@ -30,6 +30,7 @@ app.use("/api/products", productRouter);
 app.use("/api/categories", categoryRouter);
 app.use("/api/orders", orderRouter);
 app.use("/api/payments", paymentsRouter);
+
 
 
 app.use(globalErrorHandlingMiddleware);
