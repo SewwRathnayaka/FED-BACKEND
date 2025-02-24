@@ -14,7 +14,7 @@ export const categoryRouter = express.Router();
 categoryRouter
   .route("/")
   .get(getCategories)
-  .post(isAuthenticated, isAdmin, createCategory); //Remove isAuthenticated and isAdmin for using with Postman
+  .post(isAuthenticated, isAdmin, createCategory);
 categoryRouter
   .route("/:id")
   .get(getCategory)

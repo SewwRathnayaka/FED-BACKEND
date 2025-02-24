@@ -14,7 +14,7 @@ export const productRouter = express.Router();
 productRouter
   .route("/")
   .get(getProducts)
-  .post(isAuthenticated, isAdmin, createProduct); //Remove isAuthenticated and isAdmin for using with Postman
+  .post(isAuthenticated, isAdmin, createProduct);
 productRouter
   .route("/:id")
   .get(getProduct)
