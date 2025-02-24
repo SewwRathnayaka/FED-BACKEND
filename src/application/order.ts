@@ -6,6 +6,7 @@ import { getAuth } from "@clerk/express";
 import NotFoundError from "../domain/errors/not-found-error";
 import Address from "../infrastructure/schemas/Address";
 import { CreateOrderDTO } from "../domain/dto/order";
+
 export const createOrder = async (
   req: Request,
   res: Response,
@@ -21,16 +22,25 @@ export const createOrder = async (
 
     const address = await Address.create({
       ...result.data.shippingAddress,
+      userId,
     });
 
-    await Order.create({
+    const items = result.data.items.map(item => ({
+      product: item.product._id,
+      quantity: item.quantity
+    }));
+
+    const order = await Order.create({
       userId,
-      items: result.data.items,
+      items,
       addressId: address._id,
     });
 
-    res.status(201).send();
+    console.log("Created order:", order);
+
+    res.status(201).json(order);
   } catch (error) {
+    console.error("Error creating order:", error);
     next(error);
   }
 };
@@ -53,6 +63,37 @@ export const getOrder = async (
     }
     res.status(200).json(order);
   } catch (error) {
+    next(error);
+  }
+};
+
+export const getUserOrders = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    console.log("Auth object:", req.auth); // Debug auth
+    const userId = req.auth.userId;
+    console.log("UserID:", userId); // Debug userId
+
+    const orders = await Order.find({ userId });
+    console.log("Found orders:", orders); // Debug orders
+
+    const populatedOrders = await Order.find({ userId })
+      .populate({
+        path: "addressId",
+        model: "Address",
+      })
+      .populate({
+        path: "items.product",
+        model: "Product",
+      });
+    console.log("Populated orders:", populatedOrders); // Debug populated orders
+    
+    res.status(200).json(populatedOrders);
+  } catch (error) {
+    console.error("Error in getUserOrders:", error); // Debug errors
     next(error);
   }
 };
