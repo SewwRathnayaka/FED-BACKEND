@@ -2,7 +2,6 @@ import { NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import ValidationError from "../domain/errors/validation-error";
 import Order from "../infrastructure/schemas/Order";
-import { getAuth } from "@clerk/express";
 import NotFoundError from "../domain/errors/not-found-error";
 import Address from "../infrastructure/schemas/Address";
 import { CreateOrderDTO } from "../domain/dto/order";
@@ -15,39 +14,34 @@ export const createOrder = async (
   next: NextFunction
 ) => {
   try {
-    // Debug log
-    console.log('Received order data:', JSON.stringify(req.body, null, 2));
-
     const result = CreateOrderDTO.safeParse(req.body);
     if (!result.success) {
-      console.error('Validation errors:', result.error.errors);
       throw new ValidationError(JSON.stringify(result.error.errors));
     }
 
     const userId = req.auth.userId;
 
-    // Validate each item's product ID format
-    for (const item of result.data.items) {
-      if (!mongoose.Types.ObjectId.isValid(item.product)) {
-        throw new ValidationError(`Invalid product ID format: ${item.product}`);
-      }
-      
-      const product = await Product.findById(item.product);
+    // Validate products and stock in one query
+    const productIds = result.data.items.map(item => item.product);
+    const products = await Product.find({ _id: { $in: productIds } });
+    
+    const productMap = new Map(products.map(p => [p._id.toString(), p]));
+    
+    result.data.items.forEach(item => {
+      const product = productMap.get(item.product);
       if (!product) {
         throw new NotFoundError(`Product ${item.product} not found`);
       }
       if (product.stock < item.quantity) {
         throw new ValidationError(`Insufficient stock for ${product.name}`);
       }
-    }
+    });
 
-    // Create address
     const address = await Address.create({
       ...result.data.shippingAddress,
       userId,
     });
 
-    // Create order with validated data
     const order = await Order.create({
       userId,
       items: result.data.items,
@@ -56,33 +50,25 @@ export const createOrder = async (
       paymentStatus: "PENDING"
     });
 
-    // Update stock levels
-    await Promise.all(result.data.items.map(async (item) => {
-      await Product.findByIdAndUpdate(
-        item.product,
-        { $inc: { stock: -item.quantity } },
-        { new: true }
-      );
-    }));
+    // Update stock levels in bulk
+    await Product.bulkWrite(
+      result.data.items.map(item => ({
+        updateOne: {
+          filter: { _id: item.product },
+          update: { $inc: { stock: -item.quantity } }
+        }
+      }))
+    );
 
     const populatedOrder = await Order.findById(order._id)
       .populate({
         path: "items.product",
-        model: "Product",
         select: "name price image description stock"
       })
-      .populate({
-        path: "addressId",
-        model: "Address"
-      });
+      .populate("addressId");
 
     res.status(201).json(populatedOrder);
   } catch (error) {
-    console.error("Error creating order:", {
-      error,
-      body: req.body,
-      validation: error instanceof ValidationError ? error.message : null
-    });
     next(error);
   }
 };
@@ -93,13 +79,10 @@ export const getOrder = async (
   next: NextFunction
 ) => {
   try {
-    const id = req.params.id;
-    const order = await Order.findById(id).populate({
-      path: "addressId",
-      model: "Address",
-    }).populate({
-      path:"items."
-    });
+    const order = await Order.findById(req.params.id)
+      .populate("addressId")
+      .populate("items.product", "name price image");
+      
     if (!order) {
       throw new NotFoundError("Order not found");
     }
@@ -115,28 +98,13 @@ export const getUserOrders = async (
   next: NextFunction
 ) => {
   try {
-    console.log("Auth object:", req.auth); // Debug auth
-    const userId = req.auth.userId;
-    console.log("UserID:", userId); // Debug userId
-
-    const orders = await Order.find({ userId });
-    console.log("Found orders:", orders); // Debug orders
-
-    const populatedOrders = await Order.find({ userId })
-      .populate({
-        path: "addressId",
-        model: "Address",
-      })
-      .populate({
-        path: "items.product",
-        model: "Product",
-        select: "name image" // Ensure image is selected
-      });
-    console.log("Populated orders:", populatedOrders); // Debug populated orders
+    const orders = await Order.find({ userId: req.auth.userId })
+      .populate("addressId")
+      .populate("items.product", "name image")
+      .sort({ createdAt: -1 });
     
-    res.status(200).json(populatedOrders);
+    res.status(200).json(orders);
   } catch (error) {
-    console.error("Error in getUserOrders:", error); // Debug errors
     next(error);
   }
 };

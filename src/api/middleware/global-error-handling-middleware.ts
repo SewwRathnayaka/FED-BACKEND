@@ -6,40 +6,20 @@ const globalErrorHandlingMiddleware = (
   res: Response,
   next: NextFunction
 ) => {
-  console.log(error);
-  if (error.name === "NotFoundError") {
-    res
-      .status(404)
-      .json({
-        message: error.message,
-      })
-      .send();
-    return;
-  } else if (error.name === "ValidationError") {
-    res
-      .status(400)
-      .json({
-        message: error.message,
-      })
-      .send();
-    return;
-  } else if (error.name === "UnauthorizedError") {
-    res
-      .status(401)
-      .json({
-        message: error.message,
-      })
-      .send();
-    return;
-  } else {
-    res
-      .status(500)
-      .json({
-        message: error.message,
-      })
-      .send();
-    return;
-  }
+  console.error('Error:', error);
+
+  const errorResponses: Record<string, number> = {
+    NotFoundError: 404,
+    ValidationError: 400,
+    UnauthorizedError: 401
+  };
+
+  const statusCode = errorResponses[error.name] || 500;
+  
+  res.status(statusCode).json({
+    message: error.message,
+    stack: process.env.NODE_ENV === 'production' ? null : error.stack
+  });
 };
 
 export default globalErrorHandlingMiddleware;
