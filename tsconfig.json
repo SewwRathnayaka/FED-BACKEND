@@ -4,9 +4,11 @@
     "outDir": "dist",
     "strict": true,
     "lib": ["esnext"],
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "typeRoots": ["./node_modules/@types", "./src/types"]
   },
   "ts-node": {
     "files": true
-  }
+  },
+  "include": ["src/**/*"]
 }

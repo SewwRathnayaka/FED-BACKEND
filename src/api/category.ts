@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Router } from "express";
 import {
   createCategory,
   deleteCategory,
@@ -9,12 +9,13 @@ import {
 import { isAuthenticated } from "./middleware/authentication-middleware";
 import { isAdmin } from "./middleware/authorization-middleware";
 
-export const categoryRouter = express.Router();
+export const categoryRouter: Router = express.Router();
 
 categoryRouter
   .route("/")
   .get(getCategories)
   .post(isAuthenticated, isAdmin, createCategory);
+
 categoryRouter
   .route("/:id")
   .get(getCategory)
