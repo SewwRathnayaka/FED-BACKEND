@@ -10,7 +10,7 @@ export const getProducts = async (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   try {
     const categoryId = req.query.categoryId as string;
     const query = categoryId && categoryId !== "ALL" ? { categoryId } : {};
@@ -24,46 +24,23 @@ export const getProducts = async (
 
 export const createProduct = async (
   req: Request,
-  res: Response, 
+  res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   try {
-    // Debug logging
-    console.log('Create product request:', {
-      body: req.body,
-      auth: req.auth,
-      sessionClaims: req.auth?.sessionClaims,
-      role: req.auth?.sessionClaims?.metadata?.role
-    });
-
-    try {
-      const productData = CreateProductDTO.parse(req.body);
-      
-      if (!mongoose.Types.ObjectId.isValid(productData.categoryId)) {
-        return res.status(400).json({ 
-          message: "Invalid category ID format",
-          receivedId: productData.categoryId
-        });
-      }
-
-      const product = await Product.create({
-        ...productData,
-        price: Number(productData.price),
-        stock: Number(productData.stock)
+    const productData = CreateProductDTO.parse(req.body);
+    
+    if (!mongoose.Types.ObjectId.isValid(productData.categoryId)) {
+      res.status(400).json({ 
+        message: "Invalid category ID format",
+        receivedId: productData.categoryId
       });
-
-      res.status(201).json(product);
-    } catch (validationError) {
-      if (validationError instanceof ZodError) {
-        return res.status(400).json({
-          message: 'Invalid product data',
-          errors: validationError.errors
-        });
-      }
-      throw validationError;
+      return;
     }
+
+    const product = await Product.create(productData);
+    res.status(201).json(product);
   } catch (error) {
-    console.error('Product creation failed:', error);
     next(error);
   }
 };
@@ -72,7 +49,7 @@ export const getProduct = async (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   try {
     const id = req.params.id;
     const product = await Product.findById(id);
@@ -91,7 +68,7 @@ export const deleteProduct = async (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   try {
     const id = req.params.id;
     const product = await Product.findByIdAndDelete(id);
@@ -109,7 +86,7 @@ export const updateProduct = async (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   try {
     const id = req.params.id;
     const productData = CreateProductDTO.parse(req.body);
