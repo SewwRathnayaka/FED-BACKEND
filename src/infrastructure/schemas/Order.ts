@@ -15,6 +15,11 @@ const OrderSchema = new mongoose.Schema({
       type: Number,
       required: true,
       min: 1
+    },
+    stripePriceId: {
+      type: Number,
+      required: true,
+      min: 1
     }
   }],
   addressId: {

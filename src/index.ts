@@ -8,6 +8,7 @@ import { orderRouter } from "./api/order";
 import { paymentsRouter } from "./api/payment";
 import { productRouter } from "./api/product";
 import { connectDB } from "./infrastructure/db";
+import paymentRoutes from "./routes/paymentRoutes";
 
 const app = express();
 app.use(express.json()); // For parsing JSON requests
@@ -16,22 +17,35 @@ app.use(clerkMiddleware());
 const allowedOrigins = [
   'http://localhost:5173',        // Local development
   'http://localhost:3000',        // Alternative local port
-  'https://fed-storefront-frontend-sewwandi.netlify.app'  // Updated production frontend
+  'https://fed-storefront-frontend-sewwandi.netlify.app'  // Production frontend
 ];
 
 app.use(cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  credentials: true
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
+// Handle preflight requests
+app.options('*', cors());
 
 app.use("/api/products", productRouter);
 app.use("/api/categories", categoryRouter);
 app.use("/api/orders", orderRouter);
 app.use("/api/payments", paymentsRouter);
+app.use("/api/payment", paymentRoutes);
 
 app.use(globalErrorHandlingMiddleware);
 
 connectDB();
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
