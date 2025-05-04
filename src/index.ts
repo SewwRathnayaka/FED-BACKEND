@@ -11,17 +11,41 @@ import { connectDB } from "./infrastructure/db";
 
 const app = express();
 
-// Enable CORS for all routes
-app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'https://fed-storefront-frontend-sewwandi.netlify.app'],
+// CORS configuration
+const corsOptions = {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'https://fed-storefront-frontend-sewwandi.netlify.app'
+    ];
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('Blocked CORS request from origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Stripe-Signature'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 600, // Cache preflight requests for 10 minutes
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+// Apply CORS middleware first
+app.use(cors(corsOptions));
 
 // Logging middleware
 app.use((req, res, next) => {
-  console.log(`[${req.method}] request from origin: ${req.headers.origin}`);
+  console.log(`[${req.method}] ${req.path} from origin: ${req.headers.origin}`);
+  console.log('Headers:', req.headers);
   next();
 });
 
@@ -40,18 +64,15 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
+// API routes
 app.use("/api/products", productRouter);
 app.use("/api/categories", categoryRouter);
 app.use("/api/orders", orderRouter);
 app.use("/api/payments", paymentRouter);
 
-// Error handling with CORS headers
+// Error handling
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  
+  console.error('Error:', err);
   globalErrorHandlingMiddleware(err, req, res, next);
 });
 
