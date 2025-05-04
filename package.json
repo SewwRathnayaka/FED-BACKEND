@@ -2,7 +2,7 @@
   "scripts": {
     "dev": "nodemon src/index.ts",
     "build": "npm install",
-    "start": "ts-node src/index.ts",
+    "start": "node --max-old-space-size=4096 -r ts-node/register src/index.ts",
     "seed": "ts-node src/infrastructure/seed.ts"
   },
   "dependencies": {

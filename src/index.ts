@@ -47,5 +47,9 @@ app.use("/api/payment", paymentRoutes);
 app.use(globalErrorHandlingMiddleware);
 
 connectDB();
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const PORT = parseInt(process.env.PORT || '3000', 10);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+}).on('error', (err) => {
+  console.error('Server failed to start:', err);
+});
