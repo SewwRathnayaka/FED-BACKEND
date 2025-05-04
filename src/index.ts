@@ -11,37 +11,19 @@ import { connectDB } from "./infrastructure/db";
 
 const app = express();
 
+// Enable CORS for all routes
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'https://fed-storefront-frontend-sewwandi.netlify.app'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
+
 // Logging middleware
 app.use((req, res, next) => {
   console.log(`[${req.method}] request from origin: ${req.headers.origin}`);
   next();
 });
-
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
-  'https://fed-storefront-frontend-sewwandi.netlify.app'
-];
-
-const corsOptions = {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.log('CORS blocked for origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-};
-
-console.log('CORS configuration applied');
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
 
 // Test route to verify CORS
 app.get("/api/test", (req, res) => {
@@ -63,12 +45,9 @@ app.use("/api/categories", categoryRouter);
 app.use("/api/orders", orderRouter);
 app.use("/api/payments", paymentRouter);
 
-// Ensure CORS headers are preserved in error responses
+// Error handling with CORS headers
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin as string)) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
