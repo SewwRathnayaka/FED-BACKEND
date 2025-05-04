@@ -22,10 +22,6 @@ const ProductSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  stripePriceId: {
-    type: String,
-    required: true,
-  },
   stock: {
     type: Number,
     required: true,
