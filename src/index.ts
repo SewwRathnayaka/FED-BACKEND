@@ -10,13 +10,17 @@ import { productRouter } from "./api/product";
 import { connectDB } from "./infrastructure/db";
 
 const app = express();
-app.use(express.json()); // For parsing JSON requests
-app.use(clerkMiddleware());
+
+// Logging middleware
+app.use((req, res, next) => {
+  console.log(`[${req.method}] request from origin: ${req.headers.origin}`);
+  next();
+});
 
 const allowedOrigins = [
-  'http://localhost:5173',        // Local development
-  'http://localhost:3000',        // Alternative local port
-  'https://fed-storefront-frontend-sewwandi.netlify.app'  // Production frontend
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://fed-storefront-frontend-sewwandi.netlify.app'
 ];
 
 const corsOptions = {
@@ -24,22 +28,53 @@ const corsOptions = {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.log('CORS blocked for origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
+console.log('CORS configuration applied');
 app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
+
+// Test route to verify CORS
+app.get("/api/test", (req, res) => {
+  res.json({ message: "CORS is working!" });
+});
+
+// Modified Clerk middleware to skip for OPTIONS
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    return next(); // Skip Clerk for preflight
+  }
+  return clerkMiddleware()(req, res, next);
+});
+
+app.use(express.json());
 
 app.use("/api/products", productRouter);
 app.use("/api/categories", categoryRouter);
 app.use("/api/orders", orderRouter);
 app.use("/api/payments", paymentRouter);
 
-app.use(globalErrorHandlingMiddleware);
+// Ensure CORS headers are preserved in error responses
+app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin as string)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  
+  globalErrorHandlingMiddleware(err, req, res, next);
+});
 
 connectDB();
 const PORT = parseInt(process.env.PORT || '3000', 10);
