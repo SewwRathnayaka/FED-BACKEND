@@ -1,22 +1,27 @@
-import { Request, Response, NextFunction } from "express";
-import Product from "../infrastructure/schemas/Product";
+import stripe from "../infrastructure/stripe";
 import { CreateProductDTO } from "../domain/dto/product";
 import NotFoundError from "../domain/errors/not-found-error";
 import ValidationError from "../domain/errors/validation-error";
-import mongoose from "mongoose";
-import { ZodError } from "zod";
+import Product from "../infrastructure/schemas/Product";
+
+import { Request, Response, NextFunction } from "express";
 
 export const getProducts = async (
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+) => {
   try {
-    const categoryId = req.query.categoryId as string;
-    const query = categoryId && categoryId !== "ALL" ? { categoryId } : {};
-    
-    const products = await Product.find(query).lean();
-    res.status(200).json(products);
+    const { categoryId } = req.query;
+    if (!categoryId) {
+      const data = await Product.find();
+      res.status(200).json(data);
+      return;
+    }
+
+    const data = await Product.find({ categoryId });
+    res.status(200).json(data);
+    return;
   } catch (error) {
     next(error);
   }
@@ -26,20 +31,26 @@ export const createProduct = async (
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+) => {
   try {
-    const productData = CreateProductDTO.parse(req.body);
-    
-    if (!mongoose.Types.ObjectId.isValid(productData.categoryId)) {
-      res.status(400).json({ 
-        message: "Invalid category ID format",
-        receivedId: productData.categoryId
-      });
-      return;
+    const result = CreateProductDTO.safeParse(req.body);
+    if (!result.success) {
+      throw new ValidationError("Invalid product data");
     }
-
-    const product = await Product.create(productData);
+    const stripeProduct = await stripe.products.create({
+      name: result.data.name,
+      description: result.data.description,
+      default_price_data: {
+        currency: "usd",
+        unit_amount: result.data.price * 100,
+      },
+    });
+    const product = await Product.create({
+      ...result.data,
+      stripePriceId: stripeProduct.default_price,
+    });
     res.status(201).json(product);
+    return;
   } catch (error) {
     next(error);
   }
@@ -49,16 +60,15 @@ export const getProduct = async (
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+) => {
   try {
     const id = req.params.id;
-    const product = await Product.findById(id);
-    
+    const product = await Product.findById(id).populate("categoryId");
     if (!product) {
       throw new NotFoundError("Product not found");
     }
-
-    res.status(200).json(product);
+    res.status(200).json(product).send();
+    return;
   } catch (error) {
     next(error);
   }
@@ -68,7 +78,7 @@ export const deleteProduct = async (
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+) => {
   try {
     const id = req.params.id;
     const product = await Product.findByIdAndDelete(id);
@@ -77,6 +87,7 @@ export const deleteProduct = async (
       throw new NotFoundError("Product not found");
     }
     res.status(204).send();
+    return;
   } catch (error) {
     next(error);
   }
@@ -86,17 +97,17 @@ export const updateProduct = async (
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+) => {
   try {
     const id = req.params.id;
-    const productData = CreateProductDTO.parse(req.body);
-    const product = await Product.findByIdAndUpdate(id, productData, { new: true });
+    const product = await Product.findByIdAndUpdate(id, req.body);
 
     if (!product) {
       throw new NotFoundError("Product not found");
     }
 
-    res.status(200).json(product);
+    res.status(200).send(product);
+    return;
   } catch (error) {
     next(error);
   }
