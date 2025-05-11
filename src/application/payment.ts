@@ -1,8 +1,7 @@
-import { Request, Response, NextFunction } from "express";
+import { Request, Response } from "express";
 import util from "util";
 import Order from "../infrastructure/schemas/Order";
 import stripe from "../infrastructure/stripe";
-import NotFoundError from "../domain/errors/not-found-error";
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET as string;
 const FRONTEND_URL = process.env.FRONTEND_URL as string;
@@ -52,103 +51,52 @@ async function fulfillCheckout(sessionId: string) {
   }
 }
 
-export const handleWebhook = async (req: Request, res: Response, next: NextFunction) => {
+export const handleWebhook = async (req: Request, res: Response) => {
+  const payload = req.body;
+  const sig = req.headers["stripe-signature"] as string;
+
+  let event;
+
   try {
-    const sig = req.headers['stripe-signature'];
-    const event = stripe.webhooks.constructEvent(
-      req.body,
-      sig as string,
-      process.env.STRIPE_WEBHOOK_SECRET as string
-    );
+    event = stripe.webhooks.constructEvent(payload, sig, endpointSecret);
+    if (
+      event.type === "checkout.session.completed" ||
+      event.type === "checkout.session.async_payment_succeeded"
+    ) {
+      await fulfillCheckout(event.data.object.id);
 
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as any;
-      const orderId = session.metadata.orderId;
-
-      const order = await Order.findById(orderId);
-      if (!order) {
-        throw new NotFoundError(`Order ${orderId} not found`);
-      }
-
-      await Order.findByIdAndUpdate(orderId, {
-        paymentStatus: 'PAID',
-        orderStatus: 'CONFIRMED'
-      });
-
-      console.log('Order payment confirmed:', orderId);
+      res.status(200).send();
+      return;
     }
-
-    res.json({ received: true });
-  } catch (error) {
-    console.error('Webhook handling failed:', error);
-    next(error);
+  } catch (err) {
+    // @ts-ignore
+    res.status(400).send(`Webhook Error: ${err.message}`);
+    return;
   }
 };
 
-export const createCheckoutSession = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const { orderId } = req.body;
-    console.log('Request body:', req.body); // Log entire request body
-    console.log('Order ID from request:', orderId);
+export const createCheckoutSession = async (req: Request, res: Response) => {
+  const orderId = req.body.orderId;
+  console.log("body", req.body);
+  const order = await Order.findById(orderId);
 
-    if (!orderId) {
-      throw new Error('Order ID is required');
-    }
-
-    const order = await Order.findById(orderId);
-    console.log('Found order:', order); // Log found order
-    
-    if (!order) {
-      console.error('Order not found in database:', orderId);
-      throw new NotFoundError(`Order ${orderId} not found`);
-    }
-
-    // Validate order items
-    if (!order.items || order.items.length === 0) {
-      console.error('Order has no items:', orderId);
-      throw new Error('Order has no items');
-    }
-
-    // Log order details before creating session
-    console.log('Creating Stripe session for order:', {
-      id: order._id,
-      items: order.items.map(item => ({
-        productId: item.product._id,
-        stripePriceId: item.product.stripePriceId,
-        quantity: item.quantity
-      }))
-    });
-
-    const session = await stripe.checkout.sessions.create({
-      ui_mode: "embedded",
-      line_items: order.items.map((item) => ({
-        price: item.product.stripePriceId,
-        quantity: item.quantity,
-      })),
-      mode: "payment",
-      return_url: `${process.env.FRONTEND_URL}/shop/complete?session_id={CHECKOUT_SESSION_ID}`,
-      metadata: {
-        orderId: order._id.toString(), // Ensure orderId is a string
-      },
-    });
-
-    console.log('Checkout session created successfully:', {
-      sessionId: session.id,
-      clientSecret: session.client_secret
-    });
-
-    res.json({ clientSecret: session.client_secret });
-  } catch (error) {
-    console.error('Checkout session creation failed:', {
-      error: error.message,
-      stack: error.stack
-    });
-    next(error);
+  if (!order) {
+    throw new Error("Order not found");
   }
+  const session = await stripe.checkout.sessions.create({
+    ui_mode: "embedded",
+    line_items: order.items.map((item) => ({
+      price: item.product.stripePriceId,
+      quantity: item.quantity,
+    })),
+    mode: "payment",
+    return_url: `${FRONTEND_URL}/shop/complete?session_id={CHECKOUT_SESSION_ID}`,
+    metadata: {
+      orderId: req.body.orderId,
+    },
+  });
+
+  res.send({ clientSecret: session.client_secret });
 };
 
 export const retrieveSessionStatus = async (req: Request, res: Response) => {
