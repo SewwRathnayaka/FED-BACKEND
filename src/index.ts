@@ -20,21 +20,37 @@ app.post(
   handleWebhook
 );
 
-// General middleware
-app.use(express.json());
-app.use(clerkMiddleware());
-
 const allowedOrigins = [
   'http://localhost:5173',        // Local development
   'http://localhost:3000',        // Alternative local port
-  'https://fed-storefront-frontend-sewwandi.netlify.app'  // Updated production frontend
-]
+  'https://fed-storefront-frontend-sewwandi.netlify.app'  // Production frontend
+];
+
+// CORS middleware should be one of the first middleware
 app.use(cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization'] 
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin'
+  ],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 86400 // Cache preflight requests for 24 hours
 }));
+
+// Other middleware
+app.use(express.json());
+app.use(clerkMiddleware());
 
 // API routes
 app.use("/api/products", productRouter);
