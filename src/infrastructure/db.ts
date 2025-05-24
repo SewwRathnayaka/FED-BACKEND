@@ -4,13 +4,23 @@ export const connectDB = async () => {
   try {
     const connectionString = process.env.MONGODB_URI;
     if (!connectionString) {
-      throw new Error("No connection string found");
+      throw new Error("MongoDB connection string not found");
     }
 
-    await mongoose.connect(connectionString);
-    console.log("Connected to the Database");
-  } catch (error) {
-    console.log(error);
-    console.log("Error connecting to the Database");
+    await mongoose.connect(connectionString, {
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 30000,
+      socketTimeoutMS: 45000,
+      family: 4,
+      retryWrites: true,
+      w: 'majority',
+      ssl: true
+    });
+
+    console.log("✅ Connected to MongoDB successfully");
+
+  } catch (error: any) {
+    console.error("❌ MongoDB connection error:", error.message);
+    throw error;
   }
 };
