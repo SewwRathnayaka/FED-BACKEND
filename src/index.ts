@@ -13,28 +13,51 @@ import bodyParser from "body-parser";
 
 const app = express();
 
-// Move webhook route before JSON parsing middleware
+// CORS configuration
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://fed-storefront-frontend-sewwandi.netlify.app'
+];
+
+// Place this before all other middleware
+app.use(cors({
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      console.log('No origin header');
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      console.log('Allowed origin:', origin);
+      return callback(null, true);
+    }
+
+    console.error('Blocked origin:', origin);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin'
+  ]
+}));
+
+// Webhook route must come before express.json middleware
 app.post(
   "/api/stripe/webhook",
   express.raw({ type: "application/json" }),
   handleWebhook
 );
 
-// General middleware
+// Other middleware
 app.use(express.json());
 app.use(clerkMiddleware());
-
-const allowedOrigins = [
-  'http://localhost:5173',        // Local development
-  'http://localhost:3000',        // Alternative local port
-  'https://fed-storefront-frontend-sewwandi.netlify.app'  // Updated production frontend
-]
-app.use(cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization'] 
-}));
 
 // API routes
 app.use("/api/products", productRouter);

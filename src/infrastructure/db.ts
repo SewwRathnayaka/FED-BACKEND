@@ -14,10 +14,16 @@ export const connectDB = async () => {
       family: 4,
       retryWrites: true,
       w: 'majority',
-      ssl: true
+      ssl: true,
+      tlsAllowInvalidHostnames: false,
+      directConnection: false
     });
 
     console.log("✅ Connected to MongoDB successfully");
+    
+    mongoose.connection.on('error', (err) => {
+      console.error('❌ MongoDB connection error:', err);
+    });
 
   } catch (error: any) {
     console.error("❌ MongoDB connection error:", error.message);

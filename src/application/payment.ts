@@ -120,39 +120,42 @@ export const handleWebhook = async (req: Request, res: Response) => {
   }
 };
 
-export const createCheckoutSession: RequestHandler = async (req: Request, res: Response, next: NextFunction) => {
-  const { orderId } = req.body;
-  
+export const createCheckoutSession = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
+    const { orderId } = req.body;
+    
+    if (!orderId) {
+      return res.status(400).json({ error: 'orderId is required' });
+    }
+
     const order = await Order.findById(orderId);
     if (!order) {
-      res.status(404).json({ error: `Order not found: ${orderId}` });
-      return;
+      return res.status(404).json({ error: 'Order not found' });
     }
 
     console.log('Creating checkout session with items:', order.items);
 
-    // Ensure line_items is properly formatted as an array
-    const lineItems = order.items.map(item => ({
-      price: item.product.stripePriceId,
-      quantity: item.quantity
-    }));
-
-    console.log('Formatted line items:', lineItems);
-
     const session = await stripe.checkout.sessions.create({
-      ui_mode: "embedded",
-      line_items: lineItems, // Now properly formatted as array
-      mode: "payment",
-      return_url: `${FRONTEND_URL}/shop/complete?session_id={CHECKOUT_SESSION_ID}`,
+      payment_method_types: ['card'],
+      mode: 'payment',
+      ui_mode: 'embedded',
+      line_items: order.items.map(item => ({
+        price: item.product.stripePriceId,
+        quantity: item.quantity
+      })),
       metadata: {
-        orderId: orderId
-      }
+        orderId: orderId.toString()
+      },
+      return_url: `${process.env.FRONTEND_URL}/shop/complete?session_id={CHECKOUT_SESSION_ID}`
     });
 
-    res.json({ clientSecret: session.client_secret });
-  } catch (error: any) {
-    console.error('Error creating checkout session:', error);
+    res.status(200).json({ clientSecret: session.client_secret });
+  } catch (error) {
+    console.error('Checkout session creation error:', error);
     next(error);
   }
 };

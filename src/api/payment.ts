@@ -29,4 +29,3 @@ paymentsRouter.get(
   isAuthenticated, 
   retrieveSessionStatus
 );
-
