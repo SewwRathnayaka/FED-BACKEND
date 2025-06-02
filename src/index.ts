@@ -17,35 +17,37 @@ const app = express();
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
-  'https://fed-storefront-frontend-sewwandi.netlify.app'
+  'https://fed-storefront-frontend-sewwandi.netlify.app',
+  'https://fed-storefront-frontend-sewwandi-dev.netlify.app',
+  'https://fed-storefront-frontend-sewwandi.netlify.app/'
 ];
 
 // Place this before all other middleware
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    console.log('Request Origin:', origin); // Debug log
+
     if (!origin) {
-      console.log('No origin header');
       return callback(null, true);
     }
 
     if (allowedOrigins.includes(origin)) {
-      console.log('Allowed origin:', origin);
       return callback(null, true);
     }
 
-    console.error('Blocked origin:', origin);
-    return callback(new Error('Not allowed by CORS'));
+    console.error('Blocked Origin:', origin);
+    return callback(new Error('CORS not allowed'), false);
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type',
     'Authorization',
     'X-Requested-With',
     'Accept',
     'Origin'
-  ]
+  ],
+  exposedHeaders: ['Content-Range', 'X-Content-Range']
 }));
 
 // Webhook route must come before express.json middleware
