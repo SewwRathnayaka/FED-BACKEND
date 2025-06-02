@@ -87,57 +87,24 @@ async function fulfillCheckout(sessionId: string) {
   }
 }
 
-export const handleWebhook = async (req: Request, res: Response) => {
-  const sig = req.headers["stripe-signature"] as string;
-
-  try {
-    console.log("🔄 Webhook received at:", new Date().toISOString());
-    console.log("📝 Webhook Headers:", JSON.stringify(req.headers, null, 2));
-    console.log("📦 Raw Body:", req.body);
-    
-    const event = stripe.webhooks.constructEvent(
-      req.body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
-
-    console.log("✅ Webhook signature verified");
-    console.log("🎯 Event Type:", event.type);
-    console.log("📄 Event Data:", JSON.stringify(event.data.object, null, 2));
-
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-      console.log("💫 Starting fulfillment for session:", session.id);
-      await fulfillCheckout(session.id);
-      console.log("✅ Fulfillment completed for session:", session.id);
-    }
-
-    res.status(200).json({ received: true });
-  } catch (err: any) {
-    console.error("❌ Webhook Error:", err.message);
-    console.error("Stack:", err.stack);
-    res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-};
-
 export const createCheckoutSession = async (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   try {
     const { orderId } = req.body;
     
     if (!orderId) {
-      return res.status(400).json({ error: 'orderId is required' });
+      res.status(400).json({ error: 'orderId is required' });
+      return;
     }
 
     const order = await Order.findById(orderId);
     if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
+      res.status(404).json({ error: 'Order not found' });
+      return;
     }
-
-    console.log('Creating checkout session with items:', order.items);
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -155,8 +122,32 @@ export const createCheckoutSession = async (
 
     res.status(200).json({ clientSecret: session.client_secret });
   } catch (error) {
-    console.error('Checkout session creation error:', error);
     next(error);
+  }
+};
+
+export const handleWebhook = async (
+  req: Request, 
+  res: Response
+): Promise<void> => {
+  const sig = req.headers["stripe-signature"] as string;
+
+  try {
+    const event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET!
+    );
+
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+      await fulfillCheckout(session.id);
+    }
+
+    res.status(200).json({ received: true });
+  } catch (err: any) {
+    console.error("Webhook Error:", err.message);
+    res.status(400).send(`Webhook Error: ${err.message}`);
   }
 };
 
