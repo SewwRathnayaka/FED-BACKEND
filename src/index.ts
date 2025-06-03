@@ -13,51 +13,66 @@ import bodyParser from "body-parser";
 
 const app = express();
 
-// CORS configuration
+// Enhanced request logging
+app.use((req, res, next) => {
+  console.log('🔄 Request:', {
+    method: req.method,
+    path: req.path,
+    origin: req.headers.origin,
+    headers: req.headers
+  });
+  next();
+});
+
 const allowedOrigins = [
+  // Local development
   'http://localhost:5173',
   'http://localhost:3000',
+  // Production URLs
   'https://fed-storefront-frontend-sewwandi.netlify.app',
-  'https://fed-storefront-frontend-sewwandi-dev.netlify.app',
-  'https://fed-storefront-frontend-sewwandi.netlify.app/'
+  'https://fed-storefront-frontend-sewwandi-dev.netlify.app'
 ];
 
-// Place this before all other middleware
-app.use(cors({
-  origin: function(origin, callback) {
-    console.log('Request Origin:', origin); // Debug log
-
-    if (!origin) {
-      return callback(null, true);
+const corsOptions = {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    console.log('🔍 Checking origin:', origin);
+    
+    if (!origin || allowedOrigins.includes(origin)) {
+      console.log('✅ Origin allowed:', origin);
+      callback(null, true);
+    } else {
+      console.log('❌ Origin blocked:', origin);
+      callback(new Error('Not allowed by CORS'));
     }
-
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    console.error('Blocked Origin:', origin);
-    return callback(new Error('CORS not allowed'), false);
   },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: [
     'Content-Type',
     'Authorization',
     'X-Requested-With',
     'Accept',
-    'Origin'
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
   ],
-  exposedHeaders: ['Content-Range', 'X-Content-Range']
-}));
+  credentials: true,
+  optionsSuccessStatus: 200
+};
 
-// Webhook route must come before express.json middleware
+// Handle preflight requests
+app.options('*', cors(corsOptions));
+
+// Apply CORS to all routes
+app.use(cors(corsOptions));
+
+// Webhook route (before body parsing)
 app.post(
   "/api/stripe/webhook",
   express.raw({ type: "application/json" }),
   handleWebhook
 );
 
-// Other middleware
+// Regular middleware
 app.use(express.json());
 app.use(clerkMiddleware());
 
@@ -69,6 +84,7 @@ app.use("/api/payments", paymentsRouter);
 
 app.use(globalErrorHandlingMiddleware);
 
+// Start server
 connectDB();
 const PORT = process.env.PORT || 8000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));

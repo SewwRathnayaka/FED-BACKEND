@@ -9,7 +9,7 @@ export const connectDB = async () => {
 
     await mongoose.connect(connectionString, {
       maxPoolSize: 10,
-      serverSelectionTimeoutMS: 30000,
+      serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
       family: 4,
       retryWrites: true,
