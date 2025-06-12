@@ -13,38 +13,60 @@ import bodyParser from "body-parser";
 
 const app = express();
 
-// Define CORS options
+// Debug middleware to log all requests
+app.use((req, res, next) => {
+  console.log('🔄 Incoming request:', {
+    method: req.method,
+    path: req.path,
+    origin: req.headers.origin,
+    headers: req.headers
+  });
+  next();
+});
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://fed-storefront-frontend-sewwandi.netlify.app',
+  'https://fed-storefront-frontend-sewwandi-dev.netlify.app'
+];
+
+// CORS configuration
 const corsOptions = {
-  origin: [
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'https://fed-storefront-frontend-sewwandi.netlify.app',
-    'https://fed-storefront-frontend-sewwandi-dev.netlify.app'
-  ],
+  origin: function(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    console.log('🔍 Checking origin:', origin);
+
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log('❌ Blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  credentials: true,
   allowedHeaders: [
     'Content-Type',
     'Authorization',
     'Accept',
     'Origin',
-    'X-Requested-With'
+    'X-Requested-With',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
   ],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
+  credentials: true,
+  optionsSuccessStatus: 200
 };
 
-// 1. Request logging
-app.use((req, res, next) => {
-  console.log(`📝 ${req.method} ${req.path} from ${req.headers.origin}`);
-  next();
-});
-
-// 2. Enable CORS - must be before other middleware
+// Apply CORS middleware first
 app.use(cors(corsOptions));
 
-// 3. Handle OPTIONS requests explicitly
-app.options('*', cors(corsOptions));
+// Handle preflight requests for all routes
+app.options('*', (req, res, next) => {
+  console.log('👉 OPTIONS request received');
+  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,PATCH,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,Origin,X-Requested-With');
+  res.status(200).send();
+});
 
 // 4. Webhook route (must be before body parsing)
 app.post(
