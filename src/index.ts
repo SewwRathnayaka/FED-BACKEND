@@ -13,93 +13,47 @@ import bodyParser from "body-parser";
 
 const app = express();
 
-// Wrap the server setup in an async IIFE
-(async () => {
-  try {
-    // Debug middleware
-    app.use((req, res, next) => {
-      console.log('🔄 Incoming request:', {
-        method: req.method,
-        path: req.path,
-        origin: req.headers.origin,
-        headers: req.headers
-      });
-      next();
-    });
+// 1. First, add basic middleware
+app.use(express.json());
+app.use(clerkMiddleware());
 
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'https://fed-storefront-frontend-sewwandi.netlify.app',
-      'https://fed-storefront-frontend-sewwandi-dev.netlify.app'
-    ];
+// 2. Define allowed origins
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://fed-storefront-frontend-sewwandi.netlify.app',
+  'https://fed-storefront-frontend-sewwandi-dev.netlify.app'
+];
 
-    // CORS configuration
-    app.use(cors({
-      origin: function(origin, callback) {
-        console.log('🔍 Request origin:', origin);
-        
-        if (!origin || allowedOrigins.includes(origin)) {
-          return callback(null, true);
-        }
+// 3. Stripe webhook route (must be before CORS)
+app.post(
+  "/api/stripe/webhook",
+  bodyParser.raw({ type: "application/json" }),
+  handleWebhook
+);
 
-        console.error('❌ Blocked origin:', origin);
-        return callback(new Error('Not allowed by CORS'));
-      },
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: [
-        'Content-Type',
-        'Authorization',
-        'X-Requested-With',
-        'Accept',
-        'Origin'
-      ],
-      preflightContinue: false,
-      optionsSuccessStatus: 204
-    }));
+// 4. CORS configuration
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
-    // Health check endpoint (no auth required)
-    app.get('/health', (req, res) => {
-      res.status(200).json({ 
-        status: 'ok', 
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV
-      });
-    });
+// 5. API routes
+app.use("/api/products", productRouter);
+app.use("/api/categories", categoryRouter);
+app.use("/api/orders", orderRouter);
+app.use("/api/payments", paymentsRouter);
 
-    // Connect to database first
-    await connectDB();
+// 6. Error handling
+app.use(globalErrorHandlingMiddleware);
 
-    // Webhook route (before body parsing)
-    app.post(
-      "/api/stripe/webhook",
-      express.raw({ type: "application/json" }),
-      handleWebhook
-    );
-
-    // Regular middleware
-    app.use(express.json());
-    app.use(clerkMiddleware());
-
-    // API routes with /api prefix
-    app.use("/api/products", productRouter);
-    app.use("/api/categories", categoryRouter);
-    app.use("/api/orders", orderRouter);
-    app.use("/api/payments", paymentsRouter);
-
-    // Error handling
-    app.use(globalErrorHandlingMiddleware);
-
-    // Start server
-    const PORT = process.env.PORT || 10000;
-    app.listen(PORT, () => {
-      console.log(`✅ Server running on port ${PORT}`);
-      console.log('👉 Allowed origins:', allowedOrigins);
-    });
-
-  } catch (error) {
-    console.error('❌ Server startup error:', error);
-    process.exit(1);
-  }
-})();
+// 7. Connect to database and start server
+connectDB().then(() => {
+  const PORT = process.env.PORT || 8000;
+  app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+}).catch(error => {
+  console.error('❌ Database connection failed:', error);
+  process.exit(1);
+});
