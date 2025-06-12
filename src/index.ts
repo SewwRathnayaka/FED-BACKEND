@@ -13,12 +13,18 @@ import bodyParser from "body-parser";
 
 const app = express();
 
+// Add health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Debug middleware
 app.use((req, res, next) => {
   console.log('🔄 Incoming request:', {
     method: req.method,
     path: req.path,
-    origin: req.headers.origin
+    origin: req.headers.origin,
+    url: req.url
   });
   next();
 });
