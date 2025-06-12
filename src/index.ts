@@ -13,14 +13,8 @@ import bodyParser from "body-parser";
 
 const app = express();
 
-// 1. Basic request logging
-app.use((req, res, next) => {
-  console.log(`📝 ${req.method} ${req.path} from ${req.headers.origin}`);
-  next();
-});
-
-// 2. Configure CORS
-app.use(cors({
+// Define CORS options
+const corsOptions = {
   origin: [
     'http://localhost:5173',
     'http://localhost:3000',
@@ -32,31 +26,47 @@ app.use(cors({
   allowedHeaders: [
     'Content-Type',
     'Authorization',
-    'Accept'
-  ]
-}));
+    'Accept',
+    'Origin',
+    'X-Requested-With'
+  ],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
 
-// 3. Webhook route (must be before body parsing)
+// 1. Request logging
+app.use((req, res, next) => {
+  console.log(`📝 ${req.method} ${req.path} from ${req.headers.origin}`);
+  next();
+});
+
+// 2. Enable CORS - must be before other middleware
+app.use(cors(corsOptions));
+
+// 3. Handle OPTIONS requests explicitly
+app.options('*', cors(corsOptions));
+
+// 4. Webhook route (must be before body parsing)
 app.post(
   "/api/stripe/webhook",
   express.raw({ type: "application/json" }),
   handleWebhook
 );
 
-// 4. Regular middleware
+// 5. Regular middleware
 app.use(express.json());
 app.use(clerkMiddleware());
 
-// 5. API routes
+// 6. API routes
 app.use("/api/products", productRouter);
 app.use("/api/categories", categoryRouter);
 app.use("/api/orders", orderRouter);
 app.use("/api/payments", paymentsRouter);
 
-// 6. Error handling
+// 7. Error handling
 app.use(globalErrorHandlingMiddleware);
 
-// 7. Start server
+// 8. Start server
 connectDB();
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
