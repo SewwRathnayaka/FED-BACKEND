@@ -13,11 +13,9 @@ import bodyParser from "body-parser";
 
 const app = express();
 
-// 1. First, add basic middleware
 app.use(express.json());
-app.use(clerkMiddleware());
 
-// 2. Define allowed origins
+// Define allowed origins (move above CORS usage)
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
@@ -25,20 +23,23 @@ const allowedOrigins = [
   'https://fed-storefront-frontend-sewwandi-dev.netlify.app'
 ];
 
-// 3. Stripe webhook route (must be before CORS)
+// Stripe webhook route (must be before CORS)
 app.post(
   "/api/stripe/webhook",
   bodyParser.raw({ type: "application/json" }),
   handleWebhook
 );
 
-// 4. CORS configuration
+// CORS configuration (should be before Clerk and all routes)
 app.use(cors({
   origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Clerk middleware
+app.use(clerkMiddleware());
 
 // 5. API routes
 app.use("/api/products", productRouter);
