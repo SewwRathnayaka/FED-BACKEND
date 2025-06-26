@@ -1,202 +1,171 @@
-import { Request, Response, RequestHandler, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
 import util from "util";
-import Order, { IOrder } from "../infrastructure/schemas/Order";
-import Product from "../infrastructure/schemas/Product";
+import Order from "../infrastructure/schemas/Order";
 import stripe from "../infrastructure/stripe";
-import mongoose from "mongoose";
+import NotFoundError from "../domain/errors/not-found-error";
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET as string;
 const FRONTEND_URL = process.env.FRONTEND_URL as string;
 
 async function fulfillCheckout(sessionId: string) {
-  try {
-    console.log("🔄 Starting fulfillment for session:", sessionId);
-    
-    const checkoutSession = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ["line_items"]
+  // Set your secret key. Remember to switch to your live secret key in production.
+  // See your keys here: https://dashboard.stripe.com/apikeys
+  console.log("Fulfilling Checkout Session " + sessionId);
+
+  // TODO: Make this function safe to run multiple times,
+  // even concurrently, with the same session ID
+
+  // TODO: Make sure fulfillment hasn't already been
+  // peformed for this Checkout Session
+
+  // Retrieve the Checkout Session from the API with line_items expanded
+  const checkoutSession = await stripe.checkout.sessions.retrieve(sessionId, {
+    expand: ["line_items"],
+  });
+  console.log(
+    util.inspect(checkoutSession, false, null, true /* enable colors */)
+  );
+
+  const order = await Order.findById(checkoutSession.metadata?.orderId);
+  if (!order) {
+    throw new Error("Order not found");
+  }
+
+  if (order.paymentStatus !== "PENDING") {
+    throw new Error("Payment is not pending");
+  }
+
+  if (order.orderStatus !== "PENDING") {
+    throw new Error("Order is not pending");
+  }
+
+  // Check the Checkout Session's payment_status property
+  // to determine if fulfillment should be peformed
+  if (checkoutSession.payment_status !== "unpaid") {
+    // TODO: Perform fulfillment of the line items
+    // TODO: Record/save fulfillment status for this
+    // Checkout Session
+    await Order.findByIdAndUpdate(order._id, {
+      paymentStatus: "PAID",
+      orderStatus: "CONFIRMED",
     });
-    console.log("✅ Retrieved checkout session:", checkoutSession.id);
-
-    const order = await Order.findById(checkoutSession.metadata?.orderId);
-    if (!order) {
-      console.error("❌ Order not found for session:", sessionId);
-      throw new Error("Order not found");
-    }
-
-    console.log("📦 Found order:", order._id);
-    console.log("💳 Payment status:", checkoutSession.payment_status);
-    console.log("🛍️ Order status:", order.orderStatus);
-    console.log("📝 Order items:", JSON.stringify(order.items, null, 2));
-
-    if (checkoutSession.payment_status === "paid" && order.orderStatus === "PENDING") {
-      const session = await mongoose.startSession();
-      session.startTransaction();
-      console.log("🔄 Started MongoDB transaction");
-
-      try {
-        for (const item of order.items) {
-          const product = await Product.findById(item.product._id);
-          if (!product) {
-            throw new Error(`Product not found: ${item.product._id}`);
-          }
-
-          console.log(`📦 Processing item: ${product.name}`);
-          console.log(`Current stock: ${product.stock}, Reducing by: ${item.quantity}`);
-
-          const updatedStock = product.stock - item.quantity;
-          if (updatedStock < 0) {
-            throw new Error(`Insufficient stock for ${product.name}`);
-          }
-
-          await Product.findByIdAndUpdate(
-            product._id,
-            { $set: { stock: updatedStock } },
-            { session }
-          );
-
-          console.log(`✅ Updated stock for ${product.name}: ${updatedStock}`);
-        }
-
-        await Order.findByIdAndUpdate(
-          order._id,
-          {
-            paymentStatus: "PAID",
-            orderStatus: "CONFIRMED"
-          },
-          { session }
-        );
-        console.log("✅ Updated order status to CONFIRMED");
-
-        await session.commitTransaction();
-        console.log("✅ Transaction committed successfully");
-      } catch (error) {
-        console.error("❌ Error in transaction:", error);
-        await session.abortTransaction();
-        console.log("⚠️ Transaction aborted");
-        throw error;
-      } finally {
-        session.endSession();
-        console.log("👋 Session ended");
-      }
-    } else {
-      console.log("⏭️ Skipping fulfillment - payment not completed or order already processed");
-    }
-  } catch (error) {
-    console.error("❌ Error in fulfillCheckout:", error);
-    throw error;
   }
 }
+
+export const handleWebhook = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sig = req.headers['stripe-signature'];
+    const event = stripe.webhooks.constructEvent(
+      req.body,
+      sig as string,
+      process.env.STRIPE_WEBHOOK_SECRET as string
+    );
+
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as any;
+      const orderId = session.metadata.orderId;
+
+      const order = await Order.findById(orderId);
+      if (!order) {
+        throw new NotFoundError(`Order ${orderId} not found`);
+      }
+
+      await Order.findByIdAndUpdate(orderId, {
+        paymentStatus: 'PAID',
+        orderStatus: 'CONFIRMED'
+      });
+
+      console.log('Order payment confirmed:', orderId);
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Webhook handling failed:', error);
+    next(error);
+  }
+};
 
 export const createCheckoutSession = async (
   req: Request,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+) => {
   try {
     const { orderId } = req.body;
-    
+    console.log('Request body:', req.body); // Log entire request body
+    console.log('Order ID from request:', orderId);
+
     if (!orderId) {
-      res.status(400).json({ error: 'orderId is required' });
-      return;
+      throw new Error('Order ID is required');
     }
 
     const order = await Order.findById(orderId);
+    console.log('Found order:', order); // Log found order
+    
     if (!order) {
-      res.status(404).json({ error: 'Order not found' });
-      return;
+      console.error('Order not found in database:', orderId);
+      throw new NotFoundError(`Order ${orderId} not found`);
     }
+
+    // Validate order items
+    if (!order.items || order.items.length === 0) {
+      console.error('Order has no items:', orderId);
+      throw new Error('Order has no items');
+    }
+
+    // Log order details before creating session
+    console.log('Creating Stripe session for order:', {
+      id: order._id,
+      items: order.items.map(item => ({
+        productId: item.product._id,
+        stripePriceId: item.product.stripePriceId,
+        quantity: item.quantity
+      }))
+    });
 
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      mode: 'payment',
-      ui_mode: 'embedded',
-      line_items: order.items.map(item => ({
+      ui_mode: "embedded",
+      line_items: order.items.map((item) => ({
         price: item.product.stripePriceId,
-        quantity: item.quantity
+        quantity: item.quantity,
       })),
+      mode: "payment",
+      return_url: `${process.env.FRONTEND_URL}/shop/complete?session_id={CHECKOUT_SESSION_ID}`,
       metadata: {
-        orderId: orderId.toString()
+        orderId: order._id.toString(), // Ensure orderId is a string
       },
-      return_url: `${process.env.FRONTEND_URL}/shop/complete?session_id={CHECKOUT_SESSION_ID}`
     });
 
-    res.status(200).json({ clientSecret: session.client_secret });
+    console.log('Checkout session created successfully:', {
+      sessionId: session.id,
+      clientSecret: session.client_secret
+    });
+
+    res.json({ clientSecret: session.client_secret });
   } catch (error) {
-    next(error);
-  }
-};
-
-export const handleWebhook = async (
-  req: Request, 
-  res: Response
-): Promise<void> => {
-  const sig = req.headers["stripe-signature"] as string;
-
-  try {
-    const event = stripe.webhooks.constructEvent(
-      req.body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
-
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-      await fulfillCheckout(session.id);
-    }
-
-    res.status(200).json({ received: true });
-  } catch (err: any) {
-    console.error("Webhook Error:", err.message);
-    res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-};
-
-export const retrieveSessionStatus: RequestHandler = async (
-  req: Request, 
-  res: Response, 
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const checkoutSession = await stripe.checkout.sessions.retrieve(
-      req.query.session_id as string
-    );
-
-    const order = await Order.findById(checkoutSession.metadata?.orderId);
-    if (!order) {
-      res.status(404).json({ error: "Order not found" });
-      return;
-    }
-
-    // If payment is complete but order status hasn't been updated
-    if (checkoutSession.payment_status === "paid" && order.paymentStatus === "PENDING") {
-      const updatedOrder = await Order.findByIdAndUpdate(
-        order._id,
-        {
-          paymentStatus: "PAID",
-          orderStatus: "CONFIRMED"
-        },
-        { new: true }
-      ) as IOrder;
-
-      res.status(200).json({
-        orderId: updatedOrder._id,
-        status: checkoutSession.status,
-        customer_email: checkoutSession.customer_details?.email,
-        orderStatus: updatedOrder.orderStatus,
-        paymentStatus: updatedOrder.paymentStatus,
-      });
-      return;
-    }
-
-    res.status(200).json({
-      orderId: order._id,
-      status: checkoutSession.status,
-      customer_email: checkoutSession.customer_details?.email,
-      orderStatus: order.orderStatus,
-      paymentStatus: order.paymentStatus,
+    console.error('Checkout session creation failed:', {
+      error: error.message,
+      stack: error.stack
     });
-  } catch (error: any) {
-    console.error('Error retrieving session status:', error);
     next(error);
   }
+};
+
+export const retrieveSessionStatus = async (req: Request, res: Response) => {
+  const checkoutSession = await stripe.checkout.sessions.retrieve(
+    req.query.session_id as string
+  );
+
+  const order = await Order.findById(checkoutSession.metadata?.orderId);
+  if (!order) {
+    throw new Error("Order not found");
+  }
+
+  res.status(200).json({
+    orderId: order._id,
+    status: checkoutSession.status,
+    customer_email: checkoutSession.customer_details?.email,
+    orderStatus: order.orderStatus,
+    paymentStatus: order.paymentStatus,
+  });
 };

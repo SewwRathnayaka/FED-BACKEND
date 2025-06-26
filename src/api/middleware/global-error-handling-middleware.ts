@@ -6,11 +6,7 @@ const globalErrorHandlingMiddleware = (
   res: Response,
   next: NextFunction
 ) => {
-  console.error('🔥 Global Error:', {
-    message: error.message,
-    stack: error.stack,
-    type: error.constructor.name
-  });
+  console.error('Error:', error);
 
   const errorResponses: Record<string, number> = {
     NotFoundError: 404,

@@ -6,5 +6,4 @@ export const CreateProductDTO = z.object({
   description: z.string(),
   categoryId: z.string(),
   image: z.string(),
-  stripePriceId: z.string().regex(/^price_/, "Must start with 'price_'")
 });

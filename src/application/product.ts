@@ -37,26 +37,20 @@ export const createProduct = async (
     if (!result.success) {
       throw new ValidationError("Invalid product data");
     }
-
-    // Create Stripe product and price
     const stripeProduct = await stripe.products.create({
       name: result.data.name,
-      description: result.data.description
+      description: result.data.description,
+      default_price_data: {
+        currency: "usd",
+        unit_amount: result.data.price * 100,
+      },
     });
-
-    const stripePrice = await stripe.prices.create({
-      product: stripeProduct.id,
-      unit_amount: result.data.price * 100, // Convert to cents
-      currency: 'usd'
-    });
-
-    // Save product with price ID (not product ID)
     const product = await Product.create({
       ...result.data,
-      stripePriceId: stripePrice.id // Store price ID, not product ID
+      stripePriceId: stripeProduct.default_price,
     });
-
     res.status(201).json(product);
+    return;
   } catch (error) {
     next(error);
   }

@@ -1,20 +1,17 @@
 import express from "express";
-import { createCheckoutSession, handleWebhook } from "../application/payment";
+import { 
+  handleWebhook, 
+  createCheckoutSession,
+  retrieveSessionStatus 
+} from "../application/payment";
 import { isAuthenticated } from "./middleware/authentication-middleware";
 
 export const paymentsRouter = express.Router();
 
-paymentsRouter.post(
-  "/webhook",
-  express.raw({ type: 'application/json' }),
-  handleWebhook
-);
+// Raw body parser for webhook
+paymentsRouter.post("/webhook", express.raw({ type: 'application/json' }), handleWebhook);
 
-// JSON parsing middleware for all other routes
-paymentsRouter.use(express.json());
+// JSON parser for other routes
+paymentsRouter.post("/create-checkout-session", isAuthenticated, createCheckoutSession);
+paymentsRouter.get("/session-status", isAuthenticated, retrieveSessionStatus);
 
-paymentsRouter.post(
-  "/create-checkout-session", 
-  isAuthenticated, 
-  createCheckoutSession
-);
