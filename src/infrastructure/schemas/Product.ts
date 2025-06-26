@@ -25,6 +25,17 @@ const ProductSchema = new mongoose.Schema({
   stripePriceId: {
     type: String,
     required: true,
+    // Validation to ensure it starts with 'price_'
+    validate: {
+      validator: function(v: string) {
+        return v.startsWith('price_');
+      },
+      message: 'stripePriceId must be a valid Stripe price ID'
+    }
+  },
+  stripeProductId: {
+    type: String,
+    required: true
   },
   stock: {
     type: Number,

@@ -12,20 +12,23 @@ import { handleWebhook } from "./application/payment";
 import bodyParser from "body-parser";
 
 const app = express();
-app.use(express.json()); // For parsing JSON requests
+
+// Move webhook route before JSON parsing middleware
+app.post(
+  "/api/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  handleWebhook
+);
+
+// General middleware
+app.use(express.json());
 app.use(clerkMiddleware());
 
 const allowedOrigins = [
   'http://localhost:5173',        // Local development
   'http://localhost:3000',        // Alternative local port
   'https://fed-storefront-frontend-sewwandi.netlify.app'  // Updated production frontend
-];
-app.post(
-  "/api/stripe/webhook",
-  bodyParser.raw({ type: "application/json" }),
-  handleWebhook
-);
-
+]
 app.use(cors({
   origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
@@ -33,6 +36,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'] 
 }));
 
+// API routes
 app.use("/api/products", productRouter);
 app.use("/api/categories", categoryRouter);
 app.use("/api/orders", orderRouter);
