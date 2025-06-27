@@ -15,6 +15,7 @@ export const createOrder = async (
 ) => {
   try {
     console.log("🔄 Creating new order...");
+    console.log("📥 ############################################");
 
     // Get userId from Clerk auth
     const { userId } = getAuth(req);

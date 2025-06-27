@@ -4,11 +4,13 @@ import Order, { IOrder } from "../infrastructure/schemas/Order";
 import Product from "../infrastructure/schemas/Product";
 import stripe from "../infrastructure/stripe";
 import mongoose from "mongoose";
+import { log } from "console";
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET as string;
 const FRONTEND_URL = process.env.FRONTEND_URL as string;
 
 async function fulfillCheckout(sessionId: string) {
+  console.log("🔄 Starting fulfillment for session:", sessionId);
   try {
     console.log("🔄 Starting fulfillment for session:", sessionId);
     
@@ -34,7 +36,9 @@ async function fulfillCheckout(sessionId: string) {
       console.log("🔄 Started MongoDB transaction");
 
       try {
+        
         for (const item of order.items) {
+          
           const product = await Product.findById(item.product._id);
           if (!product) {
             throw new Error(`Product not found: ${item.product._id}`);
@@ -42,8 +46,9 @@ async function fulfillCheckout(sessionId: string) {
 
           console.log(`📦 Processing item: ${product.name}`);
           console.log(`Current stock: ${product.stock}, Reducing by: ${item.quantity}`);
-
+        
           const updatedStock = product.stock - item.quantity;
+        
           if (updatedStock < 0) {
             throw new Error(`Insufficient stock for ${product.name}`);
           }
@@ -104,7 +109,7 @@ export const handleWebhook = async (req: Request, res: Response) => {
     console.log("✅ Webhook signature verified");
     console.log("🎯 Event Type:", event.type);
     console.log("📄 Event Data:", JSON.stringify(event.data.object, null, 2));
-
+    console.log("🔄 Processing event...: ",event.type === "checkout.session.completed");
     if (event.type === "checkout.session.completed") {
       const session = event.data.object;
       console.log("💫 Starting fulfillment for session:", session.id);
@@ -175,6 +180,7 @@ export const retrieveSessionStatus: RequestHandler = async (
 
     // If payment is complete but order status hasn't been updated
     if (checkoutSession.payment_status === "paid" && order.paymentStatus === "PENDING") {
+      await fulfillCheckout(checkoutSession.id);
       const updatedOrder = await Order.findByIdAndUpdate(
         order._id,
         {
