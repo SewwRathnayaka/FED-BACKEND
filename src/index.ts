@@ -25,11 +25,11 @@ app.use(express.json());
 app.use(clerkMiddleware());
 
 const allowedOrigins = [
-  'http://localhost:5173',        // Local development
-  'http://localhost:3000',        // Alternative local port
-  'https://fed-storefront-frontend-sewwandi.netlify.app',
-  'https://fed-storefront-frontend-sewwandi-dev.netlify.app'
-]
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://fed-storefront-frontend-sewwandi.netlify.app", // <-- add this
+  "https://fed-storefront-frontend-sewwandi-dev.netlify.app", // <-- keep this
+];
 app.use(cors({
   origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
