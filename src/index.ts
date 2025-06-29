@@ -1,7 +1,7 @@
 import express from "express";
-import { clerkMiddleware } from "@clerk/express";
 import cors from "cors";
 import "dotenv/config";
+import { clerkMiddleware } from "@clerk/express";
 import { categoryRouter } from "./api/category";
 import globalErrorHandlingMiddleware from "./api/middleware/global-error-handling-middleware";
 import { orderRouter } from "./api/order";
@@ -12,26 +12,13 @@ import { handleWebhook } from "./application/payment";
 
 const app = express();
 
-const PORT = process.env.PORT || 8000;
-
-// Move webhook route before JSON parsing middleware
-app.post(
-  "/api/stripe/webhook",
-  express.raw({ type: "application/json" }),
-  handleWebhook
-);
-
-// General middleware
-app.use(express.json());
-app.use(clerkMiddleware());
-
+// 1. CORS middleware FIRST!
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'https://fed-storefront-frontend-sewwandi.netlify.app',
   'https://fed-storefront-frontend-sewwandi-dev.netlify.app'
 ];
-
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -45,7 +32,18 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.options('*', cors());
+// 2. Now add the rest
+const PORT = process.env.PORT || 8000;
+
+// Stripe webhook route before JSON parsing
+app.post(
+  "/api/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  handleWebhook
+);
+
+app.use(express.json());
+app.use(clerkMiddleware());
 
 // Logging middleware
 app.use((req, res, next) => {
