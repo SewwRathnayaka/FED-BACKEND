@@ -9,9 +9,10 @@ import { paymentsRouter } from "./api/payment";
 import { productRouter } from "./api/product";
 import { connectDB } from "./infrastructure/db";
 import { handleWebhook } from "./application/payment";
-import bodyParser from "body-parser";
 
 const app = express();
+
+const PORT = process.env.PORT || 8000;
 
 // Move webhook route before JSON parsing middleware
 app.post(
@@ -45,14 +46,32 @@ app.use(cors({
 
 app.options('*', cors());
 
+// Logging middleware
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // API routes
 app.use("/api/products", productRouter);
 app.use("/api/categories", categoryRouter);
 app.use("/api/orders", orderRouter);
 app.use("/api/payments", paymentsRouter);
 
+// Global error handler
 app.use(globalErrorHandlingMiddleware);
 
-connectDB();
-const PORT = process.env.PORT || 8000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Health check
+app.get("/", (req, res) => {
+  res.send("Backend is running!");
+});
+
+// Connect to DB, then start server
+connectDB()
+  .then(() => {
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  })
+  .catch((err) => {
+    console.error("Failed to connect to DB", err);
+    process.exit(1);
+  });
