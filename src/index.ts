@@ -25,17 +25,25 @@ app.use(express.json());
 app.use(clerkMiddleware());
 
 const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "https://fed-storefront-frontend-sewwandi.netlify.app", // <-- add this
-  "https://fed-storefront-frontend-sewwandi-dev.netlify.app", // <-- keep this
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://fed-storefront-frontend-sewwandi.netlify.app'
 ];
+
 app.use(cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization'] 
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+app.options('*', cors());
 
 // API routes
 app.use("/api/products", productRouter);
