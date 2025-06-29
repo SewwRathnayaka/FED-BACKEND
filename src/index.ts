@@ -65,6 +65,10 @@ app.get("/", (req, res) => {
   res.send("Backend is running!");
 });
 
+app.get("/ping", (req, res) => {
+  res.send("pong");
+});
+
 // Connect to DB, then start server
 connectDB()
   .then(() => {
