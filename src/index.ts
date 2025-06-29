@@ -28,7 +28,8 @@ app.use(clerkMiddleware());
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
-  'https://fed-storefront-frontend-sewwandi.netlify.app'
+  'https://fed-storefront-frontend-sewwandi.netlify.app',
+  'https://fed-storefront-frontend-sewwandi-dev.netlify.app'
 ];
 
 app.use(cors({
