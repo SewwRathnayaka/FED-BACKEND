@@ -14,17 +14,20 @@ declare namespace Express {
 
 export const isAdmin = (req: Request, res: Response, next: NextFunction): void => {
   try {
-    const role = req.auth?.sessionClaims?.metadata?.role;
-    
+    // Check both possible locations for role
+    const role =
+      req.auth?.sessionClaims?.role ||
+      req.auth?.sessionClaims?.metadata?.role;
+
     console.log('Authorization Check:', {
       role: role,
       authObject: req.auth,
       sessionClaims: req.auth?.sessionClaims,
       metadata: req.auth?.sessionClaims?.metadata
     });
-    
+
     if (role !== 'admin') {
-      res.status(403).json({ 
+      res.status(403).json({
         message: "Admin access required",
         debug: {
           receivedRole: role,

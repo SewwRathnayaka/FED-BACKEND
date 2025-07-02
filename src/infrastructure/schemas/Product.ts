@@ -34,8 +34,7 @@ const ProductSchema = new mongoose.Schema({
     }
   },
   stripeProductId: {
-    type: String,
-    required: true
+    type: String
   },
   stock: {
     type: Number,
