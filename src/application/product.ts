@@ -33,31 +33,39 @@ export const createProduct = async (
   next: NextFunction
 ) => {
   try {
-    const result = CreateProductDTO.safeParse(req.body);
-    if (!result.success) {
-      throw new ValidationError("Invalid product data");
-    }
+    console.log("🟢 [BACKEND] Received product creation request:", req.body);
 
-    // Create Stripe product and price
+    const { name, price, description, image, stock, categoryId } = req.body;
+
+    // 1. Create product in Stripe
     const stripeProduct = await stripe.products.create({
-      name: result.data.name,
-      description: result.data.description
+      name,
+      description,
+      images: image ? [image] : [],
     });
 
+    // 2. Create price in Stripe
     const stripePrice = await stripe.prices.create({
       product: stripeProduct.id,
-      unit_amount: result.data.price * 100, // Convert to cents
-      currency: 'usd'
+      unit_amount: Math.round(Number(price) * 100), // Stripe expects cents
+      currency: "usd", // or your currency
     });
 
-    // Save product with price ID (not product ID)
+    // 3. Save everything in MongoDB
     const product = await Product.create({
-      ...result.data,
-      stripePriceId: stripePrice.id // Store price ID, not product ID
+      name,
+      price,
+      description,
+      image,
+      stock,
+      categoryId,
+      stripeProductId: stripeProduct.id,
+      stripePriceId: stripePrice.id,
     });
 
     res.status(201).json(product);
   } catch (error) {
+    console.error("❌ [BACKEND] Product creation error:", error);
     next(error);
   }
 };

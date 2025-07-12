@@ -6,27 +6,34 @@ import {
 } from "../application/payment";
 import { isAuthenticated } from "./middleware/authentication-middleware";
 
-export const paymentsRouter = express.Router();
+const router = express.Router();
 
 // Important: This must be the first route
-paymentsRouter.post(
+router.post(
   "/webhook",
   express.raw({ type: 'application/json' }),
   handleWebhook
 );
 
 // JSON parsing middleware for all other routes
-paymentsRouter.use(express.json());
+router.use(express.json());
 
-paymentsRouter.post(
+router.post(
   "/create-checkout-session", 
   isAuthenticated, 
   createCheckoutSession
 );
 
-paymentsRouter.get(
+// Add this to handle preflight OPTIONS requests:
+router.options("/create-checkout-session", (req, res) => {
+  res.sendStatus(204);
+});
+
+router.get(
   "/session-status", 
   isAuthenticated, 
   retrieveSessionStatus
 );
+
+export { router as paymentsRouter };
 
