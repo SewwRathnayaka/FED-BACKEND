@@ -1,10 +1,11 @@
-import stripe from "../infrastructure/stripe";
-import { CreateProductDTO } from "../domain/dto/product";
-import NotFoundError from "../domain/errors/not-found-error";
-import ValidationError from "../domain/errors/validation-error";
+import { Request, Response, NextFunction } from "express";
+import Stripe from "stripe";
 import Product from "../infrastructure/schemas/Product";
 
-import { Request, Response, NextFunction } from "express";
+// Load Stripe with secret key
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2025-02-24.acacia",
+});
 
 export const getProducts = async (
   req: Request,
@@ -22,7 +23,7 @@ export const getProducts = async (
     const data = await Product.find({ categoryId });
     res.status(200).json(data);
     return;
-  } catch (error) {
+  } catch (error: any) {
     next(error);
   }
 };
@@ -33,29 +34,27 @@ export const createProduct = async (
   next: NextFunction
 ) => {
   try {
-    console.log("🟢 [BACKEND] Received product creation request:", req.body);
+    const { name, description, price, image, categoryId, stock } = req.body;
 
-    const { name, price, description, image, stock, categoryId } = req.body;
-
-    // 1. Create product in Stripe
+    // 1. Create product on Stripe
     const stripeProduct = await stripe.products.create({
       name,
       description,
-      images: image ? [image] : [],
+      images: [image],
     });
 
-    // 2. Create price in Stripe
+    // 2. Create price on Stripe
     const stripePrice = await stripe.prices.create({
+      unit_amount: Math.round(price * 100), // Stripe requires cents
+      currency: "usd", // or req.body.currency if dynamic
       product: stripeProduct.id,
-      unit_amount: Math.round(Number(price) * 100), // Stripe expects cents
-      currency: "usd", // or your currency
     });
 
-    // 3. Save everything in MongoDB
-    const product = await Product.create({
+    // 3. Save to MongoDB
+    const newProduct = new Product({
       name,
-      price,
       description,
+      price,
       image,
       stock,
       categoryId,
@@ -63,8 +62,13 @@ export const createProduct = async (
       stripePriceId: stripePrice.id,
     });
 
-    res.status(201).json(product);
-  } catch (error) {
+    const savedProduct = await newProduct.save();
+
+    res.status(201).json({
+      message: "Product created successfully",
+      product: savedProduct,
+    });
+  } catch (error: any) {
     console.error("❌ [BACKEND] Product creation error:", error);
     next(error);
   }
@@ -79,11 +83,13 @@ export const getProduct = async (
     const id = req.params.id;
     const product = await Product.findById(id).populate("categoryId");
     if (!product) {
-      throw new NotFoundError("Product not found");
+      // throw new NotFoundError("Product not found");
+      // Use error middleware to handle status
+      res.status(404).json({ error: "Product not found" });
+      return;
     }
-    res.status(200).json(product).send();
-    return;
-  } catch (error) {
+    res.status(200).json(product);
+  } catch (error: any) {
     next(error);
   }
 };
@@ -98,11 +104,12 @@ export const deleteProduct = async (
     const product = await Product.findByIdAndDelete(id);
 
     if (!product) {
-      throw new NotFoundError("Product not found");
+      // throw new NotFoundError("Product not found");
+      res.status(404).json({ error: "Product not found" });
+      return;
     }
     res.status(204).send();
-    return;
-  } catch (error) {
+  } catch (error: any) {
     next(error);
   }
 };
@@ -114,15 +121,16 @@ export const updateProduct = async (
 ) => {
   try {
     const id = req.params.id;
-    const product = await Product.findByIdAndUpdate(id, req.body);
+    const product = await Product.findByIdAndUpdate(id, req.body, { new: true });
 
     if (!product) {
-      throw new NotFoundError("Product not found");
+      // throw new NotFoundError("Product not found");
+      res.status(404).json({ error: "Product not found" });
+      return;
     }
 
-    res.status(200).send(product);
-    return;
-  } catch (error) {
+    res.status(200).json(product);
+  } catch (error: any) {
     next(error);
   }
 };
