@@ -1,11 +1,9 @@
 import { Request, Response, NextFunction } from "express";
-import Stripe from "stripe";
+import stripe from "../infrastructure/stripe";
+import { CreateProductDTO } from "../domain/dto/product";
+import NotFoundError from "../domain/errors/not-found-error";
+import ValidationError from "../domain/errors/validation-error";
 import Product from "../infrastructure/schemas/Product";
-
-// Load Stripe with secret key
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-02-24.acacia",
-});
 
 export const getProducts = async (
   req: Request,
@@ -23,7 +21,7 @@ export const getProducts = async (
     const data = await Product.find({ categoryId });
     res.status(200).json(data);
     return;
-  } catch (error: any) {
+  } catch (error) {
     next(error);
   }
 };
@@ -34,42 +32,37 @@ export const createProduct = async (
   next: NextFunction
 ) => {
   try {
-    const { name, description, price, image, categoryId, stock } = req.body;
+    // Validate input using Zod DTO
+    const result = CreateProductDTO.safeParse(req.body);
+    if (!result.success) {
+      throw new ValidationError("Invalid product data");
+    }
 
-    // 1. Create product on Stripe
+    // Create Stripe product and price
     const stripeProduct = await stripe.products.create({
-      name,
-      description,
-      images: [image],
+      name: result.data.name,
+      description: result.data.description,
+      images: [result.data.image],
     });
 
-    // 2. Create price on Stripe
     const stripePrice = await stripe.prices.create({
-      unit_amount: Math.round(price * 100), // Stripe requires cents
-      currency: "usd", // or req.body.currency if dynamic
       product: stripeProduct.id,
+      unit_amount: Math.round(result.data.price * 100), // Convert to cents
+      currency: "usd",
     });
 
-    // 3. Save to MongoDB
-    const newProduct = new Product({
-      name,
-      description,
-      price,
-      image,
-      stock,
-      categoryId,
-      stripeProductId: stripeProduct.id,
+    // Save product with both price ID and product ID
+    const product = await Product.create({
+      ...result.data,
       stripePriceId: stripePrice.id,
+      stripeProductId: stripeProduct.id,
     });
-
-    const savedProduct = await newProduct.save();
 
     res.status(201).json({
       message: "Product created successfully",
-      product: savedProduct,
+      product,
     });
-  } catch (error: any) {
-    console.error("❌ [BACKEND] Product creation error:", error);
+  } catch (error) {
     next(error);
   }
 };
@@ -83,13 +76,10 @@ export const getProduct = async (
     const id = req.params.id;
     const product = await Product.findById(id).populate("categoryId");
     if (!product) {
-      // throw new NotFoundError("Product not found");
-      // Use error middleware to handle status
-      res.status(404).json({ error: "Product not found" });
-      return;
+      throw new NotFoundError("Product not found");
     }
     res.status(200).json(product);
-  } catch (error: any) {
+  } catch (error) {
     next(error);
   }
 };
@@ -104,12 +94,10 @@ export const deleteProduct = async (
     const product = await Product.findByIdAndDelete(id);
 
     if (!product) {
-      // throw new NotFoundError("Product not found");
-      res.status(404).json({ error: "Product not found" });
-      return;
+      throw new NotFoundError("Product not found");
     }
     res.status(204).send();
-  } catch (error: any) {
+  } catch (error) {
     next(error);
   }
 };
@@ -124,13 +112,11 @@ export const updateProduct = async (
     const product = await Product.findByIdAndUpdate(id, req.body, { new: true });
 
     if (!product) {
-      // throw new NotFoundError("Product not found");
-      res.status(404).json({ error: "Product not found" });
-      return;
+      throw new NotFoundError("Product not found");
     }
 
     res.status(200).json(product);
-  } catch (error: any) {
+  } catch (error) {
     next(error);
   }
 };
