@@ -7,6 +7,7 @@ import globalErrorHandlingMiddleware from "./api/middleware/global-error-handlin
 import { orderRouter } from "./api/order";
 import { paymentsRouter } from "./api/payment";
 import { productRouter } from "./api/product";
+import { uploadRouter } from "./api/upload";
 import { connectDB } from "./infrastructure/db";
 import { handleWebhook } from "./application/payment";
 
@@ -56,6 +57,7 @@ app.use("/api/products", productRouter);
 app.use("/api/categories", categoryRouter);
 app.use("/api/orders", orderRouter);
 app.use("/api/payments", paymentsRouter);
+app.use("/api/upload", uploadRouter);
 
 // Global error handler
 app.use(globalErrorHandlingMiddleware);

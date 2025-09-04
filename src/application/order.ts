@@ -32,60 +32,64 @@ export const createOrder = async (
       throw new ValidationError("Invalid order data");
     }
 
+    // Get all product IDs for batch query
+    const productIds = result.data.items.map(item => item.product._id);
+    
+    // Batch fetch all products at once instead of individual queries
+    const products = await Product.find({ _id: { $in: productIds } });
+    const productMap = new Map(products.map(p => [p._id.toString(), p]));
+    
     // Check stock availability for all items
-    await Promise.all(
-      result.data.items.map(async (item) => {
-        console.log("🔍 Checking stock for item:", item.product._id);
-        const product = await Product.findById(item.product._id);
+    for (const item of result.data.items) {
+      console.log("🔍 Checking stock for item:", item.product._id);
+      const product = productMap.get(item.product._id);
 
-        if (!product) {
-          console.error("❌ Product not found:", item.product._id);
-          throw new Error(`Product not found: ${item.product._id}`);
-        }
+      if (!product) {
+        console.error("❌ Product not found:", item.product._id);
+        throw new Error(`Product not found: ${item.product._id}`);
+      }
 
-        console.log(
-          "📦 Current stock:",
-          product.stock,
-          "Requested:",
-          item.quantity
+      console.log(
+        "📦 Current stock:",
+        product.stock,
+        "Requested:",
+        item.quantity
+      );
+      if (product.stock < item.quantity) {
+        console.error("❌ Insufficient stock for", product.name);
+        throw new ValidationError(
+          `Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`
         );
-        if (product.stock < item.quantity) {
-          console.error("❌ Insufficient stock for", product.name);
-          throw new ValidationError(
-            `Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`
-          );
-        }
-      })
-    );
+      }
+    }
 
     // Create address and order
     const address = await Address.create({
       ...result.data.shippingAddress,
     });
 
-    const items = await Promise.all(
-      result.data.items.map(async (item) => {
-        const product = await Product.findById(item.product._id);
-        if (!product) {
-          throw new Error(`Product not found: ${item.product._id}`);
-        }
-        if (!product.stripePriceId) {
-          throw new Error(`Product ${product._id} missing stripePriceId`);
-        }
+    // Use the already fetched products instead of querying again
+    const items = result.data.items.map((item) => {
+      const product = productMap.get(item.product._id);
+      if (!product) {
+        throw new Error(`Product not found: ${item.product._id}`);
+      }
+      if (!product.stripePriceId) {
+        throw new Error(`Product ${product._id} missing stripePriceId`);
+      }
 
-        return {
-          product: {
-            _id: product._id,
-            name: product.name,
-            price: product.price,
-            image: product.image,
-            description: product.description,
-            stripePriceId: product.stripePriceId, // Make sure this is included
-          },
-          quantity: item.quantity,
-        };
-      })
-    );
+      return {
+        product: {
+          _id: product._id,
+          name: product.name,
+          price: product.price,
+          image: product.image,
+          description: product.description,
+          stripePriceId: product.stripePriceId, // Make sure this is included
+        },
+        quantity: item.quantity,
+      };
+    });
 
     console.log(items);
 
@@ -149,7 +153,9 @@ export const getUserOrders = async (
         path: "addressId",
         model: "Address"
       })
-      .sort({ createdAt: -1 });
+      .select('items orderStatus paymentStatus createdAt updatedAt addressId')
+      .sort({ createdAt: -1 })
+      .lean();
 
     console.log(`📦 Found ${orders.length} orders for user ${userId}`);
     res.status(200).json(orders);

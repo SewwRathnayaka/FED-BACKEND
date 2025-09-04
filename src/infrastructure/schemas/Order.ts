@@ -55,6 +55,13 @@ const OrderSchema = new mongoose.Schema({
   },
 });
 
+// Add indexes for better query performance
+OrderSchema.index({ userId: 1 }); // For user orders lookup
+OrderSchema.index({ orderStatus: 1 }); // For status filtering
+OrderSchema.index({ paymentStatus: 1 }); // For payment status filtering
+OrderSchema.index({ createdAt: -1 }); // For recent orders
+OrderSchema.index({ userId: 1, createdAt: -1 }); // Compound index for user orders
+
 const Order = mongoose.model<IOrder>("Order", OrderSchema);
 
 export default Order;

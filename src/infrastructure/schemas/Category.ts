@@ -7,4 +7,7 @@ const CategorySchema = new mongoose.Schema({
   },
 });
 
+// Add index for better query performance
+CategorySchema.index({ name: 1 }); // For category name lookups
+
 export default mongoose.model("Category", CategorySchema);
