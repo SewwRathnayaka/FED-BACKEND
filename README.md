@@ -343,7 +343,7 @@ For support and questions:
 - Check the API documentation
 - Review the code comments
 - Open an issue on GitHub
-- Contact the development team
+- Contact the development team / attempting category filtering
 
 ---
 
